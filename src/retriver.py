@@ -1,6 +1,3 @@
-from langchain_core.vectorstores import VectorStoreRetriever
-
-
 def get_retriever(vectorstore, k=4):
     """
     Creates a retriever from the FAISS vector store.

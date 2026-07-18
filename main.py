@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from src.loader import load_pdf
 from src.splitter import split_documents
 from src.vectorstore import create_vectorstore
-from src.retriever import get_retriever
+from src.retriver import get_retriever
 from src.rag import create_rag_chain, ask_question
 
 load_dotenv()
