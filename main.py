@@ -5,7 +5,7 @@ from src.loader import load_pdf
 from src.splitter import split_documents
 from src.vectorstore import create_vectorstore
 from src.retriver import get_retriever
-from src.rag import create_rag_chain, ask_question
+from src.rag import create_rag_chain, ask_question, create_chat_chain, ask_general_question
 
 load_dotenv()
 
@@ -16,52 +16,72 @@ st.set_page_config(
 )
 
 st.title("📚 Book Query Resolver")
-st.markdown("### Upload a PDF and ask questions about it.")
+st.markdown("### Chat with the assistant, with optional PDF context.")
 
-uploaded_file = st.file_uploader(
-    "Choose a PDF",
-    type=["pdf"]
-)
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {
+            "role": "assistant",
+            "content": "Hello. Ask me anything. If you upload a PDF, I can answer using that document too."
+        }
+    ]
 
-if uploaded_file is not None:
+if "chat_chain" not in st.session_state:
+    st.session_state.chat_chain = create_chat_chain()
 
-    with st.spinner("Loading PDF..."):
-        documents = load_pdf(uploaded_file)
+if "rag_chain" not in st.session_state:
+    st.session_state.rag_chain = None
 
-    st.success(f"✅ PDF Loaded ({len(documents)} pages)")
-
-    with st.spinner("Splitting document into chunks..."):
-        chunks = split_documents(documents)
-
-    st.success(f"✅ Created {len(chunks)} chunks")
-
-    with st.spinner("Generating embeddings and building vector database..."):
-        vectorstore = create_vectorstore(chunks)
-
-    retriever = get_retriever(vectorstore)
-
-    rag_chain = create_rag_chain(retriever)
-
-    st.divider()
-
-    question = st.text_input(
-        "Ask a question about the uploaded book"
+with st.sidebar:
+    st.header("PDF Mode")
+    uploaded_file = st.file_uploader(
+        "Optional: upload a PDF for book-specific answers",
+        type=["pdf"]
     )
 
-    if st.button("Ask"):
+    if uploaded_file is not None:
+        with st.spinner("Loading PDF..."):
+            documents = load_pdf(uploaded_file)
 
-        if question.strip() == "":
-            st.warning("Please enter a question.")
+        with st.spinner("Splitting document into chunks..."):
+            chunks = split_documents(documents)
 
-        else:
+        with st.spinner("Generating embeddings and building vector database..."):
+            vectorstore = create_vectorstore(chunks)
 
-            with st.spinner("Searching the book..."):
+        retriever = get_retriever(vectorstore)
+        st.session_state.rag_chain = create_rag_chain(retriever)
 
-                answer = ask_question(
-                    rag_chain,
-                    question
-                )
+        st.success(f"PDF ready: {len(documents)} pages, {len(chunks)} chunks")
 
-            st.subheader("Answer")
+    if st.button("Clear chat"):
+        st.session_state.messages = [
+            {
+                "role": "assistant",
+                "content": "Hello. Ask me anything. If you upload a PDF, I can answer using that document too."
+            }
+        ]
+        st.rerun()
 
-            st.write(answer)
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+
+question = st.chat_input("Type your message")
+
+if question:
+    st.session_state.messages.append({"role": "user", "content": question})
+
+    with st.chat_message("user"):
+        st.write(question)
+
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            if st.session_state.rag_chain is not None:
+                answer = ask_question(st.session_state.rag_chain, question)
+            else:
+                answer = ask_general_question(st.session_state.chat_chain, question)
+
+        st.write(answer)
+
+    st.session_state.messages.append({"role": "assistant", "content": answer})

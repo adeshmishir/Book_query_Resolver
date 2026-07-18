@@ -23,7 +23,7 @@ Context:
 {context}
 
 Question:
-{question}
+{input}
 
 Answer:
 """

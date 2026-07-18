@@ -1,5 +1,6 @@
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains.retrieval import create_retrieval_chain
+from langchain_core.prompts import ChatPromptTemplate
 
 from src.llm import get_llm
 from src.prompt import get_prompt
@@ -38,3 +39,33 @@ def ask_question(rag_chain, question):
     )
 
     return response["answer"]
+
+
+def create_chat_chain():
+    """
+    Creates a direct chat chain for normal assistant conversations.
+    """
+
+    llm = get_llm()
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "You are a helpful AI assistant. Answer clearly and concisely."),
+            ("human", "{input}"),
+        ]
+    )
+
+    return prompt | llm
+
+
+def ask_general_question(chat_chain, question):
+    """
+    Runs the direct chat chain for normal conversations.
+    """
+
+    response = chat_chain.invoke(
+        {
+            "input": question
+        }
+    )
+
+    return getattr(response, "content", str(response))
