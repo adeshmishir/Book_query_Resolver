@@ -6,6 +6,30 @@ from src.llm import get_llm
 from src.prompt import get_prompt
 
 
+def _relevance_llm():
+    llm = get_llm()
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You decide whether a user question is answerable from the provided book summary. "
+                "If the question is about the document itself (title, topics, what it covers) or the "
+                "topics in the summary, reply ONLY with: yes. For any question, even a question that "
+                "needs external knowledge, reply ONLY with: no. Reply with exactly one word.",
+            ),
+            ("human", "Book summary:\n{summary}\n\nQuestion: {question}"),
+        ]
+    )
+    return prompt | llm
+
+
+def is_relevant(question: str, summary: str) -> bool:
+    chain = _relevance_llm()
+    response = chain.invoke({"summary": summary, "question": question})
+    text = getattr(response, "content", str(response)).strip().lower()
+    return text.startswith("yes")
+
+
 def create_rag_chain(retriever):
     """
     Creates and returns the complete RAG pipeline.

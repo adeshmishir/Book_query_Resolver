@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from src.loader import load_pdf
-from src.rag import ask_general_question, ask_question, create_chat_chain, create_rag_chain
+from src.rag import ask_general_question, ask_question, create_chat_chain, create_rag_chain, is_relevant
 from src.retriver import get_retriever
 from src.splitter import split_documents
 from src.vectorstore import create_vectorstore
@@ -38,6 +38,7 @@ def get_session(session_id: str) -> dict:
             "filename": None,
             "pages": 0,
             "chunks": 0,
+            "context_summary": "",
         }
 
     return sessions[session_id]
@@ -67,12 +68,22 @@ def chat(req: ChatRequest):
     rag_chain = session["rag_chain"]
 
     if rag_chain is not None:
-        answer = ask_question(rag_chain, req.message)
+        try:
+            if is_relevant(req.message, session.get("context_summary", "")):
+                answer = ask_question(rag_chain, req.message)
+            else:
+                answer = fallback_answer(req.message)
+        except Exception:
+            answer = fallback_answer(req.message)
     else:
-        chat_chain = create_chat_chain()
-        answer = ask_general_question(chat_chain, req.message)
+        answer = fallback_answer(req.message)
 
     return ChatResponse(answer=answer, using_pdf=rag_chain is not None)
+
+
+def fallback_answer(message: str) -> str:
+    chat_chain = create_chat_chain()
+    return ask_general_question(chat_chain, message)
 
 
 @app.post("/api/upload")
@@ -103,6 +114,9 @@ async def upload_pdf(session_id: str = Form(...), file: UploadFile = File(...)):
         session["filename"] = file.filename
         session["pages"] = len(documents)
         session["chunks"] = len(chunks)
+        session["context_summary"] = " ".join(
+            (d.page_content or "").strip() for d in documents[:3]
+        )[:2000]
     finally:
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
@@ -121,6 +135,7 @@ def clear_session(session_id: str = Form(...)):
     session["filename"] = None
     session["pages"] = 0
     session["chunks"] = 0
+    session["context_summary"] = ""
 
     return {"cleared": True}
 
