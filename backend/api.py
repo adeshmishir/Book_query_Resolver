@@ -1,8 +1,11 @@
 import os
 import tempfile
 import uuid
+from pathlib import Path
 
 from dotenv import load_dotenv
+import httpx
+
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -13,7 +16,8 @@ from src.retriver import get_retriever
 from src.splitter import split_documents
 from src.vectorstore import create_vectorstore
 
-load_dotenv()
+BACKEND_DIR = Path(__file__).resolve().parent
+load_dotenv(BACKEND_DIR / ".env")
 
 app = FastAPI(title="Book Query Resolver API")
 
@@ -67,16 +71,27 @@ def chat(req: ChatRequest):
     session = get_session(req.session_id)
     rag_chain = session["rag_chain"]
 
-    if rag_chain is not None:
-        try:
-            if is_relevant(req.message, session.get("context_summary", "")):
-                answer = ask_question(rag_chain, req.message)
-            else:
+    try:
+        if rag_chain is not None:
+            try:
+                if is_relevant(req.message, session.get("context_summary", "")):
+                    answer = ask_question(rag_chain, req.message)
+                else:
+                    answer = fallback_answer(req.message)
+            except Exception:
                 answer = fallback_answer(req.message)
-        except Exception:
+        else:
             answer = fallback_answer(req.message)
-    else:
-        answer = fallback_answer(req.message)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"The AI service is temporarily unavailable (HTTP {e.response.status_code}). Please try again in a moment.",
+        ) from e
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"The AI service is temporarily unavailable. Please try again in a moment.",
+        ) from exc
 
     return ChatResponse(answer=answer, using_pdf=rag_chain is not None)
 

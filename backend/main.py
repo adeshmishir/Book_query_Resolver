@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -7,7 +9,8 @@ from src.vectorstore import create_vectorstore
 from src.retriver import get_retriever
 from src.rag import create_rag_chain, ask_question, create_chat_chain, ask_general_question
 
-load_dotenv()
+BACKEND_DIR = Path(__file__).resolve().parent
+load_dotenv(BACKEND_DIR / ".env")
 
 st.set_page_config(
     page_title="Book Query Resolver",

@@ -3,6 +3,15 @@ import './App.css'
 
 const API_BASE = '/api'
 
+async function readResponse(res) {
+  const text = await res.text()
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { detail: text || `Request failed (${res.status})` }
+  }
+}
+
 function generateSessionId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID()
@@ -67,7 +76,7 @@ function App() {
           method: 'POST',
           body: formData,
         })
-        const data = await res.json()
+        const data = await readResponse(res)
         if (!res.ok) throw new Error(data.detail || 'Upload failed')
         setPdfInfo(data)
         setMessages((prev) => [
@@ -102,7 +111,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, session_id: sessionId }),
       })
-      const data = await res.json()
+      const data = await readResponse(res)
       if (!res.ok) throw new Error(data.detail || 'Request failed')
       setMessages((prev) => [...prev, { role: 'assistant', content: data.answer }])
     } catch (err) {
