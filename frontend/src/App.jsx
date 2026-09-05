@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
+import Sidebar from './components/Sidebar.jsx'
+import ChatHeader from './components/ChatHeader.jsx'
+import ChatMessage from './components/ChatMessage.jsx'
+import EmptyState from './components/EmptyState.jsx'
+import ChatInput from './components/ChatInput.jsx'
+import { AlertIcon } from './components/icons.jsx'
 
 const API_BASE = '/api'
 
@@ -19,41 +25,18 @@ function generateSessionId() {
   return `session-${Date.now()}`
 }
 
-const WELCOME_MESSAGE = {
-  role: 'assistant',
-  content:
-    'Hello. Ask me anything. If you upload a PDF, I can answer using that document too.',
-}
-
-function AssistantIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-    </svg>
-  )
-}
-
-function UserIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  )
-}
-
 function App() {
   const [sessionId] = useState(generateSessionId)
-  const [messages, setMessages] = useState([WELCOME_MESSAGE])
+  const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isAsking, setIsAsking] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [pdfInfo, setPdfInfo] = useState(null)
   const [error, setError] = useState('')
-  const [isDragging, setIsDragging] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const fileInputRef = useRef(null)
   const scrollRef = useRef(null)
+  const inputRef = useRef(null)
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -61,6 +44,14 @@ function App() {
       behavior: 'smooth',
     })
   }, [messages, isAsking])
+
+  useEffect(() => {
+    if (!isAsking) inputRef.current?.focus()
+  }, [isAsking])
+
+  const openUpload = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
 
   const handleUpload = useCallback(
     async (file) => {
@@ -96,8 +87,8 @@ function App() {
     [sessionId, isUploading],
   )
 
-  async function sendMessage() {
-    const message = input.trim()
+  async function sendMessage(messageOverride) {
+    const message = (messageOverride ?? input).trim()
     if (!message || isAsking) return
 
     setMessages((prev) => [...prev, { role: 'user', content: message }])
@@ -133,138 +124,84 @@ function App() {
       // server reset is best-effort; clear the UI regardless
     }
     setPdfInfo(null)
-    setMessages([WELCOME_MESSAGE])
+    setMessages([])
+    setInput('')
+    setSidebarOpen(false)
+  }
+
+  function newChat() {
+    setMessages([])
+    setInput('')
+    setError('')
+    setSidebarOpen(false)
+  }
+
+  function handleExample(prompt) {
+    sendMessage(prompt)
   }
 
   return (
     <div className="app">
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <div className="brand">
-            <span className="brand-logo">
-              <AssistantIcon />
-            </span>
-            <span className="brand-name">Book Query Resolver</span>
-          </div>
-          <p className="app-subtitle">Chat with the assistant, with optional PDF context.</p>
-        </div>
+      <Sidebar
+        appName="BookQuery AI"
+        pdfInfo={pdfInfo}
+        isUploading={isUploading}
+        open={sidebarOpen}
+        onUpload={handleUpload}
+        onUploadClick={openUpload}
+        onNewChat={newChat}
+        onClearChat={clearChat}
+      />
 
-        <div className="sidebar-body">
-          <h2 className="section-title">PDF Mode</h2>
-
-          <div
-            className={`dropzone${isDragging ? ' dragover' : ''}`}
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => {
-              e.preventDefault()
-              setIsDragging(true)
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault()
-              setIsDragging(false)
-              handleUpload(e.dataTransfer.files?.[0])
-            }}
-          >
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <span className="dropzone-title">{isUploading ? 'Loading PDF...' : 'Upload a PDF'}</span>
-            <span className="dropzone-sub">or drag &amp; drop here</span>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf"
-            hidden
-            onChange={(e) => handleUpload(e.target.files?.[0])}
-          />
-
-          {pdfInfo ? (
-            <div className="pdf-info">
-              <div className="pdf-info-head">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                </svg>
-                <span className="pdf-status">Using PDF context</span>
-              </div>
-              <div className="pdf-name">{pdfInfo.filename}</div>
-              <div className="pdf-meta">
-                {pdfInfo.pages} pages · {pdfInfo.chunks} chunks
-              </div>
-            </div>
-          ) : (
-            <p className="hint">Upload a PDF to answer questions using that document.</p>
-          )}
-
-          <button type="button" className="clear-button" onClick={clearChat}>
-            Clear chat
-          </button>
-        </div>
-      </aside>
+      {sidebarOpen && <div className="backdrop" onClick={() => setSidebarOpen(false)} />}
 
       <main className="chat">
-        <header className="chat-header">
-          <span className="chat-title">
-            {pdfInfo ? 'PDF mode active' : 'General assistant'}
-          </span>
-          <span className={`status-dot${pdfInfo ? ' online' : ''}`} />
-        </header>
+        <ChatHeader
+          title={pdfInfo ? 'Book mode' : 'General assistant'}
+          pdfActive={!!pdfInfo}
+          onMenuClick={() => setSidebarOpen(true)}
+        />
+
+        {error && (
+          <div className="error-banner" role="alert">
+            <AlertIcon size={16} />
+            <span>{error}</span>
+          </div>
+        )}
 
         <div className="messages" ref={scrollRef}>
-          {messages.map((msg, i) => {
-            if (msg.role === 'system') {
-              return (
+          {messages.length === 0 ? (
+            <EmptyState onExampleClick={handleExample} onUploadClick={openUpload} />
+          ) : (
+            messages.map((msg, i) =>
+              msg.role === 'system' ? (
                 <div key={i} className="system-note">
                   {msg.content}
                 </div>
-              )
-            }
-            return (
-              <div key={i} className={`message ${msg.role}`}>
-                <span className={`avatar ${msg.role}`}>
-                  {msg.role === 'user' ? <UserIcon /> : <AssistantIcon />}
-                </span>
-                <div className={`bubble ${msg.role}`}>{msg.content}</div>
-              </div>
+              ) : (
+                <ChatMessage key={i} role={msg.role} content={msg.content} />
+              ),
             )
-          })}
-          {isAsking && (
-            <div className="message assistant">
-              <span className="avatar assistant">
-                <AssistantIcon />
-              </span>
-              <div className="bubble assistant typing">
-                <span className="dot" />
-                <span className="dot" />
-                <span className="dot" />
-              </div>
-            </div>
           )}
+          {isAsking && messages.length > 0 && <ChatMessage role="assistant" isTyping />}
         </div>
 
-        {error && <div className="error">{error}</div>}
+        <ChatInput
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onSend={sendMessage}
+          disabled={isAsking}
+          onUploadClick={openUpload}
+          inputRef={inputRef}
+        />
 
-        <form
-          className="composer"
-          onSubmit={(e) => {
-            e.preventDefault()
-            sendMessage()
-          }}
-        >
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message"
-            disabled={isAsking}
-          />
-          <button type="submit" disabled={!input.trim() || isAsking}>
-            {isAsking ? 'Sending...' : 'Send'}
-          </button>
-        </form>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf"
+          hidden
+          onChange={(e) => handleUpload(e.target.files?.[0])}
+        />
       </main>
     </div>
   )
